@@ -1,0 +1,6 @@
+[
+  { "id": 1, "name": "Aparat Sony A7 III", "category": "Foto", "status": "Dostępny" },
+  { "id": 2, "name": "Gogle Meta Quest 3", "category": "VR", "status": "Wypożyczony" },
+  { "id": 3, "name": "Mikrofon Rode NT1-A", "category": "Audio", "status": "Dostępny" },
+  { "id": 4, "name": "Konsola PlayStation 5", "category": "Gaming", "status": "Dostępny" }
+]

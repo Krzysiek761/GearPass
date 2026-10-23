@@ -1,14 +1,23 @@
-import './App.css'
+import { useState, useEffect } from 'react';
+import './App.css';
+import mockData from './mockData.json';
 
-// Dane makietowe (Mock Data) dla aplikacji GearPass
-const mockEquipment = [
-  { id: 1, name: 'Aparat Sony A7 III', category: 'Foto', status: 'Dostępny' },
-  { id: 2, name: 'Gogle Meta Quest 3', category: 'VR', status: 'Wypożyczony' },
-  { id: 3, name: 'Mikrofon Rode NT1-A', category: 'Audio', status: 'Dostępny' },
-  { id: 4, name: 'Konsola PlayStation 5', category: 'Gaming', status: 'Dostępny' }
-];
+interface Equipment {
+  id: number;
+  name: string;
+  category: string;
+  status: string;
+}
 
 function App() {
+  // Stan przechowujący nasze dane - gotowy na podpięcie backendu
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+
+  // useEffect symuluje moment pobierania danych po załadowaniu strony
+  useEffect(() => {
+    setEquipment(mockData);
+  }, []);
+
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
       <h1>Katalog Sprzętu - GearPass</h1>
@@ -22,7 +31,7 @@ function App() {
           </tr>
         </thead>
         <tbody>
-          {mockEquipment.map((item) => (
+          {equipment.map((item) => (
             <tr key={item.id}>
               <td>{item.id}</td>
               <td>{item.name}</td>
@@ -35,7 +44,7 @@ function App() {
         </tbody>
       </table>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
