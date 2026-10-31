@@ -32,3 +32,13 @@ DBA (Database Admin)Krzysztof Wojtkowiak 94750
  Warstwa Logiki (Private Subnet): Zawiera Backend API stworzony w technologiach Python i FastAPI. Odbiera zapytania REST API od warstwy prezentacji i łączy się z usługą Azure Key Vault w celu bezpiecznego pobierania kluczy. Odpowiada również za zapis dokumentacji fotograficznej w usłudze Azure Blob Storage.  
  
  Warstwa Danych (Isolated Subnet): Jest to całkowicie wyizolowana podsieć zawierająca bazę danych PostgreSQL na Azure VM. Komunikuje się wyłącznie z warstwą logiki poprzez połączenie na porcie 5432, co chroni dane przed nieautoryzowanym dostępem.
+
+## Dokumentacja API
+| Metoda | Endpoint | Opis |
+| :--- | :--- | :--- |
+| GET | `/api/equipment` | Pobranie pełnej listy zasobów |
+| POST | `/api/equipment` | Utworzenie nowego zasobu z walidacją |
+
+## Instrukcja Uruchomienia Lokalnego
+**Backend:** `cd backend` -> `uvicorn main:app --reload`
+**Frontend:** `cd frontend` -> `npm install` -> `npm run dev`
