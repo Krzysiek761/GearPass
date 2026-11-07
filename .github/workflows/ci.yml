@@ -1,0 +1,61 @@
+name: CI & Security Scan
+
+# ZADANIE E1: Wyzwalacze dla gałęzi main oraz Adam
+on:
+  push:
+    branches: [ "main", "Adam" ]
+  pull_request:
+    branches: [ "main", "Adam" ]
+
+jobs:
+  # ZADANIE E3 i E4: Skanowanie sekretów i podatności
+  security-scan:
+    name: Security & Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # E3: Detekcja zaszytych sekretów (TruffleHog)
+      - name: Secret Scanning (TruffleHog)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+      # E4: Skanowanie podatności w kodzie i zależnościach (Trivy)
+      - name: Security Scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          exit-code: '0'
+
+  # ZADANIE E2: Automatyczne budowanie i testowanie (Frontend + Backend)
+  build:
+    name: Build Frontend and Backend
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Frontend
+        run: cd frontend && npm ci && npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build & Verify Backend
+        run: |
+          cd backend
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m py_compile *.py
