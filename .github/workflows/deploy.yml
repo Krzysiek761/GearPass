@@ -102,12 +102,13 @@ jobs:
           az webapp config set --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" \
             --startup-file "bash startup.sh" --only-show-errors
           az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" \
-            --src-path gearpass-release.zip --type zip --restart true --timeout 360000 --only-show-errors
+            --src-path gearpass-release.zip --type zip --restart true \
+            --async true --track-status false --only-show-errors
       - name: Verify the public HTTPS URL and deployed revision
         run: |
           host=$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query defaultHostName -o tsv)
           [[ "$host" == *.azurewebsites.net ]]
           public_url="https://$host"
-          python config/azure/verify_http.py "$public_url" "$GITHUB_SHA" --attempts 24
+          python config/azure/verify_http.py "$public_url" "$GITHUB_SHA" --attempts 36
           printf 'GearPass: %s\n\nVerified frontend and backend commit: `%s`\n' \
             "$public_url" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
