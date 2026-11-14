@@ -74,8 +74,8 @@ jobs:
       cancel-in-progress: false
     env:
       AZURE_CORE_OUTPUT: none
-      APP_NAME: gearpass-blok08
-      RESOURCE_GROUP: rg-gearpass
+      APP_NAME: ${{ fromJSON(vars.AZURE_DEPLOY_CONFIG || '{}').appName || 'gearpass-blok08' }}
+      RESOURCE_GROUP: ${{ fromJSON(vars.AZURE_DEPLOY_CONFIG || '{}').resourceGroup || 'rg-gearpass' }}
     steps:
       - uses: actions/checkout@v4
         with:
