@@ -1,0 +1,92 @@
+name: GearPass CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan checkout and changed commits with Gitleaks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          image=ghcr.io/gitleaks/gitleaks:v8.24.3
+          scan() {
+            docker run --rm --user "$(id -u):$(id -g)" \
+              -v "$PWD:/repo:ro" -w /repo "$image" "$@" --redact --no-banner
+          }
+          scan dir .
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA=$(git rev-parse HEAD^)
+          fi
+          scan git "." --log-opts="$BASE_SHA..HEAD"
+
+  vulnerabilities:
+    name: Vulnerability scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit frontend lockfile with npm
+        working-directory: frontend
+        run: npm audit --package-lock-only --audit-level=high
+      - name: Install Python security scanners
+        run: python -m pip install pip-audit bandit
+      - name: Audit backend dependencies with pip-audit
+        run: python -m pip_audit -r backend/requirements.txt
+      - name: Scan backend source with Bandit
+        run: python -m bandit -r backend --exclude backend/tests -ll -ii
+
+  frontend:
+    name: Frontend build and lint
+    needs: [secrets, vulnerabilities]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend build and tests
+    needs: [secrets, vulnerabilities]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend and test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Compile Python sources
+        run: python -m compileall -q .
+      - name: Test FastAPI endpoints
+        run: python -m unittest discover -s tests -v
