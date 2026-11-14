@@ -1,8 +1,7 @@
-# Wdrożenie GearPass do Azure
+# Blok 08 – GearPass na Azure App Service
 
-1. W aktywnej subskrypcji projektu utwórz Azure Static Web Apps (Free, środowisko laboratoryjne). Jako źródło wybierz Other, aby korzystać z workflow w tym repozytorium. Web jest publikowany w Static Web Apps, a backend działa jako zarządzana funkcja HTTP pod tą samą domeną.
-2. W Overview ustaw politykę wdrożenia na Azure deployment token i pobierz token z Manage deployment token. W GearPass wybierz Settings → Secrets and variables → Actions → New repository secret. Zapisz go jako AZURE_STATIC_WEB_APPS_API_TOKEN. Token udziela dostępu do publikacji na tej witrynie. Nie wklejaj go do kodu ani opisu PR.
-3. Scal przez chronioną gałąź main. GearPass CI odpala skanery, lint, build i testy, a następnie wywołuje deploy.yml przez needs. Pull request buduje i testuje pakiet. Publikacja do Azure działa po push na main.
-4. W GitHub Actions otwórz ostatni udany przebieg dla main. Podsumowanie healthchecku zawiera publiczny adres HTTPS i commit. Ręcznie otwórz stronę, /version.json, /api/health i /api/equipment. Wartość commit w pierwszych dwóch odpowiedziach JSON powinna odpowiadać commitowi z przebiegu.
+App Service (Linux, Python 3.12, F1) publikuje statyczny frontend React i FastAPI pod jedną domeną HTTPS. Azure for Students dopuszcza Sweden Central, a dostępne regiony Static Web Apps były poza listą tej subskrypcji.
 
-Backend wykorzystuje istniejące dane demonstracyjne i uruchamia FastAPI przez adapter Azure Functions. Wdrożenie z Bloku 8 nie wymaga tworzenia PostgreSQL ani zmiany istniejącej sieci Azure.
+GitHub Actions loguje się przez OIDC. Tożsamość użytkownika zarządzana przez Azure ma federację tylko dla repo:Krzysiek761/GearPass:ref:refs/heads/main, audience api://AzureADTokenExchange i Website Contributor tylko dla aplikacji gearpass-blok08. Ustaw zmienną repozytorium AZURE_DEPLOY_CONFIG jako JSON z polami clientId, tenantId oraz subscriptionId. Wartości to identyfikatory, bez hasła lub klucza.
+
+Workflow pakuje kod, frontend, zależności i SHA oraz sprawdza pakiet po zaliczeniu skanerów i testów. Push na main publikuje sprawdzony ZIP. Healthcheck potwierdza publiczną stronę, /version.json, /api/health i /api/equipment. Frontend korzysta z dotychczasowych danych demonstracyjnych. Aplikacja używa wspólnego hosta F1 dla obu warstw, bez odrębnej prywatnej podsieci API.
