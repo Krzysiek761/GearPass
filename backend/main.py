@@ -1,7 +1,18 @@
+import json
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from models import Equipment
 
 app = FastAPI(title="GearPass API")
+RELEASE_VERSION = Path(__file__).with_name("version.json")
+
+
+@app.get("/api/health")
+def health():
+    commit = json.loads(RELEASE_VERSION.read_text(encoding="utf-8"))["commit"] if RELEASE_VERSION.is_file() else "local"
+    return {"status": "ok", "commit": commit}
+
 
 @app.get("/api/equipment", status_code=200)
 def get_all_equipment():

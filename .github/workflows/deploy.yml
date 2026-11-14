@@ -1,0 +1,142 @@
+name: Deploy GearPass to Azure
+
+on:
+  workflow_call:
+    secrets:
+      AZURE_STATIC_WEB_APPS_API_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package and verify web and API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build the public frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Package Azure Functions and stamp the release
+        run: |
+          mkdir -p release/web release/api
+          cp -a frontend/dist/. release/web/
+          cp config/azure/staticwebapp.config.json release/web/
+          cp config/azure/host.json release/api/
+          cp -R config/azure/GearPassHttp release/api/
+          cp backend/main.py backend/models.py backend/requirements.txt release/api/
+          python -m pip install -r backend/requirements.txt \
+            --target release/api/.python_packages/lib/site-packages
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = json.dumps({"commit": os.environ["GITHUB_SHA"]}) + "\n"
+          for folder in ("release/web", "release/api"):
+              Path(folder, "version.json").write_text(version, encoding="utf-8")
+          PY
+      - name: Verify frontend and serverless package
+        run: python config/azure/verify_package.py
+      - name: Save the verified release
+        uses: actions/upload-artifact@v4
+        with:
+          name: gearpass-release
+          path: release/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  azure:
+    name: Deploy web and API to Azure
+    needs: package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: gearpass-azure-main
+      cancel-in-progress: false
+    steps:
+      - name: Check the selected revision and deployment secret
+        env:
+          AZURE_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -z "$AZURE_TOKEN" ]]; then
+            echo "::error::Configure the AZURE_STATIC_WEB_APPS_API_TOKEN repository secret."
+            exit 1
+          fi
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo "::error::The release is superseded by a newer commit on main."
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: gearpass-release
+          path: release
+      - name: Publish static frontend and managed Azure Functions
+        id: publish
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: release/web
+          api_location: release/api
+          output_location: ''
+          skip_app_build: true
+          skip_api_build: true
+          production_branch: main
+      - name: Verify the public HTTPS URL and deployed revision
+        env:
+          PUBLIC_URL: ${{ steps.publish.outputs.static_web_app_url }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          from urllib.parse import urlsplit
+          from urllib.request import Request, urlopen
+
+          base = os.environ["PUBLIC_URL"].rstrip("/")
+          parsed = urlsplit(base)
+          if parsed.scheme != "https" or not parsed.hostname or not parsed.hostname.endswith(".azurestaticapps.net"):
+              raise SystemExit("Expected the Azure Static Web Apps HTTPS URL.")
+
+          commit = os.environ["GITHUB_SHA"]
+
+          def read(path):
+              request = Request(f"{base}{path}?commit={commit}", headers={"Cache-Control": "no-cache"})
+              with urlopen(request, timeout=15) as response:
+                  return response.read()
+
+          for attempt in range(20):
+              try:
+                  if b'id="root"' not in read("/"):
+                      raise ValueError("The public page is not the GearPass frontend.")
+                  if json.loads(read("/version.json"))["commit"] != commit:
+                      raise ValueError("The frontend commit does not match.")
+                  if json.loads(read("/api/health")) != {"status": "ok", "commit": commit}:
+                      raise ValueError("The backend healthcheck or commit does not match.")
+                  if not isinstance(json.loads(read("/api/equipment")), list):
+                      raise ValueError("The equipment endpoint did not return a list.")
+                  break
+              except (OSError, ValueError, KeyError) as error:
+                  print(f"Attempt {attempt + 1}: {error}", flush=True)
+                  if attempt == 19:
+                      raise
+                  time.sleep(10)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              print(f"GearPass: {base}\n\nVerified frontend and backend commit: `{commit}`", file=summary)
+          PY
