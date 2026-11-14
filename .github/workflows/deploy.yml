@@ -33,7 +33,8 @@ jobs:
           cp backend/main.py backend/models.py config/azure/startup.sh release/
           cp -a frontend/dist/. release/static/
           python -m pip install -r backend/requirements.txt \
-            --target release/.python_packages/lib/site-packages
+            --target "$RUNNER_TEMP/gearpass-deps"
+          tar -czf release/dependencies.tar.gz -C "$RUNNER_TEMP/gearpass-deps" .
           python - <<'PY'
           import json
           import os
