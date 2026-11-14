@@ -1,7 +1,19 @@
+import json
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from models import Equipment
 
 app = FastAPI(title="GearPass API")
+RELEASE_VERSION = Path(__file__).with_name("version.json")
+
+
+@app.get("/api/health")
+def health():
+    commit = json.loads(RELEASE_VERSION.read_text(encoding="utf-8"))["commit"] if RELEASE_VERSION.is_file() else "local"
+    return {"status": "ok", "commit": commit}
+
 
 @app.get("/api/equipment", status_code=200)
 def get_all_equipment():
@@ -22,3 +34,8 @@ def delete_equipment(item_id: int):
     if item_id > 100:
         raise HTTPException(status_code=404, detail="Sprzęt nie istnieje")
     return {"message": f"Usunięto sprzęt {item_id}"}
+
+# Route the compiled frontend after all API routes have been registered.
+STATIC_ROOT = Path(__file__).with_name("static")
+if STATIC_ROOT.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC_ROOT, html=True), name="web")

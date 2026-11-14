@@ -1,0 +1,113 @@
+name: Deploy GearPass to Azure App Service
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package and verify web and API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the public frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Package FastAPI, dependencies and the frontend
+        run: |
+          mkdir -p release/static
+          cp backend/main.py backend/models.py config/azure/startup.sh release/
+          cp -a frontend/dist/. release/static/
+          python -m pip install -r backend/requirements.txt \
+            --target release/.python_packages/lib/site-packages
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = json.dumps({"commit": os.environ["GITHUB_SHA"]}) + "\n"
+          for folder in ("release", "release/static"):
+              Path(folder, "version.json").write_text(version, encoding="utf-8")
+          PY
+      - name: Start the packaged Web and API and verify them over HTTP
+        run: |
+          (cd release && exec bash startup.sh) > gearpass-test.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          if ! python config/azure/verify_http.py http://127.0.0.1:8000 "$GITHUB_SHA" --attempts 8; then
+            cat gearpass-test.log
+            exit 1
+          fi
+      - name: Save the verified release
+        run: cd release && zip -q -r ../gearpass-release.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gearpass-release
+          path: gearpass-release.zip
+          if-no-files-found: error
+
+  azure:
+    name: Deploy web and API to Azure App Service
+    needs: package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: gearpass-azure-main
+      cancel-in-progress: false
+    env:
+      AZURE_CORE_OUTPUT: none
+      APP_NAME: gearpass-blok08
+      RESOURCE_GROUP: rg-gearpass
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check that this is still the latest main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo "::error::The release is superseded by a newer commit on main."
+            exit 1
+          fi
+      - name: Sign in to Azure with OIDC
+        uses: Azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ fromJSON(vars.AZURE_DEPLOY_CONFIG || '{}').clientId }}
+          tenant-id: ${{ fromJSON(vars.AZURE_DEPLOY_CONFIG || '{}').tenantId }}
+          subscription-id: ${{ fromJSON(vars.AZURE_DEPLOY_CONFIG || '{}').subscriptionId }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: gearpass-release
+      - name: Publish the verified ZIP to Azure App Service
+        run: |
+          az webapp config set --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" \
+            --startup-file "bash startup.sh" --only-show-errors
+          az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" \
+            --src-path gearpass-release.zip --type zip --restart true --timeout 360000 --only-show-errors
+      - name: Verify the public HTTPS URL and deployed revision
+        run: |
+          host=$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query defaultHostName -o tsv)
+          [[ "$host" == *.azurewebsites.net ]]
+          public_url="https://$host"
+          python config/azure/verify_http.py "$public_url" "$GITHUB_SHA" --attempts 24
+          printf 'GearPass: %s\n\nVerified frontend and backend commit: `%s`\n' \
+            "$public_url" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

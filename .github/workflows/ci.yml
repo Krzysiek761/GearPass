@@ -90,3 +90,11 @@ jobs:
         run: python -m compileall -q .
       - name: Test FastAPI endpoints
         run: python -m unittest discover -s tests -v
+
+  delivery:
+    name: GearPass delivery
+    needs: [secrets, vulnerabilities, frontend, backend]
+    uses: ./.github/workflows/deploy.yml
+    permissions:
+      contents: read
+      id-token: write
