@@ -20,22 +20,23 @@ DBA (Database Admin)Krzysztof Wojtkowiak 94750
 
 ## Architektura
 
-Publiczne demo używa Azure App Service F1. Azure kończy TLS i przekierowuje HTTP do HTTPS. Frontend React i API FastAPI działają na wspólnym hoście. Endpointy katalogu zwracają dane demonstracyjne. Demo nie ma połączenia z wdrożoną bazą PostgreSQL.
+[Publiczny GearPass](https://gearpass-projekt-sc.swedencentral.cloudapp.azure.com/) działa w Azure Sweden Central. W `vnet-gearpass` każda warstwa ma własną podsieć i NSG. Caddy na `vm-gearpass-web` obsługuje React, TLS oraz przekierowanie HTTP. Zapytania `/api/*` trafiają do FastAPI na `vm-gearpass-app`, a stan katalogu jest przechowywany w PostgreSQL na `vm-gearpass-data`.
 
-Publiczne demo: https://gearpass-blok08-bcetfjepebbef8hq.swedencentral-01.azurewebsites.net/
+Publiczny adres IP ma warstwa Web. Backend i PostgreSQL używają prywatnych adresów. PostgreSQL dodatkowo ogranicza logowanie do konta aplikacji i prywatnego adresu backendu. Operacje zapisu katalogu wymagają nagłówka `X-GearPass-Key`.
 
-Schemat docelowej architektury trójwarstwowej:
+[Demo na App Service F1](https://gearpass-blok08-bcetfjepebbef8hq.swedencentral-01.azurewebsites.net/) działa niezależnie na danych demonstracyjnych. GitHub Actions wdraża tam zmiany z `main`. Wersja na maszynach w VNet jest wdrażana osobno.
 
 ![Szkic koncepcyjny architektury](docs/obraz.png)
 
 ## Reguły sieciowe (blok 09)
 
-[Szablon sieci w Azure](config/azure/hardening-network.bicep) definiuje `vnet-gearpass` oraz NSG przypisane do trzech podsieci. Reguły w tabeli dotyczą tych podsieci. Publiczne demo na F1 działa poza tą siecią. Do potwierdzenia pełnej izolacji trzeba uruchomić oddzielne warstwy Web, App i Data w sieci i sprawdzić ruch między nimi.
+[Szablon sieci w Azure](config/azure/hardening-network.bicep) definiuje `vnet-gearpass` oraz NSG przypisane do trzech podsieci. Reguły w tabeli obowiązują na podsieciach działającego wdrożenia.
 
 | Warstwa / podsieć | Kierunek | Źródło → cel | TCP | Decyzja |
 | --- | --- | --- | --- | --- |
 | Web · `snet-web` | Inbound | Internet → Web | 80, 443 | Zezwól |
 | Web · `snet-web` | Outbound | Web → App | 8000 | Zezwól |
+| Web · `snet-web` | Outbound | Web → Internet | 443 | Zezwól na odnowienie TLS |
 | App · `snet-app` | Inbound | Web → App | 8000 | Zezwól |
 | App · `snet-app` | Inbound | Internet → App | 22, 3389 | Blokuj |
 | App · `snet-app` | Outbound | App → Data | 5432 | Zezwól |
@@ -45,7 +46,7 @@ Schemat docelowej architektury trójwarstwowej:
 
 Tag `Internet` oznacza ruch z publicznego Internetu. Priorytety zezwoleń i blokad szczegółowych to 100 i 110. Reguły blokujące pozostały ruch mają priorytet 4096 i wyprzedzają domyślne reguły NSG. NSG są stanowe, więc odpowiedzi na dozwolone połączenia nie wymagają osobnych reguł.
 
-W publicznym App Service włączone jest `HTTPS Only`, a minimalna wersja TLS dla witryny i SCM to 1.2. FTPS i debugowanie zdalne są wyłączone. Wdrożenie ZIP korzysta z tożsamości OIDC GitHub Actions.
+Caddy pobiera i odnawia certyfikat publicznej domeny. Połączenie HTTP przekierowuje na HTTPS z zachowaniem ścieżki i parametrów. Na maszynach nie ma publicznego SSH ani RDP. Weryfikacja Azure Network Watcher potwierdziła zezwolenia Web → App i App → Data oraz blokady z Internetu.
 
 ## Dokumentacja API
 | Metoda | Endpoint | Opis |
