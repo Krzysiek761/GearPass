@@ -18,20 +18,34 @@ Backend Developer Krzysztof Wojtkowiak 94750
 
 DBA (Database Admin)Krzysztof Wojtkowiak 94750
 
- Architektura i Stos Technologiczny 
- 
- Projekt oparty jest o Architekturę 3-tier, z podziałem na warstwy znajdujące się w osobnych podsieciach: Warstwa prezentacji (Web): Publiczna.Warstwa logiki (API): Prywatna (bez publicznego IP).
- Warstwa danych (Baza danych): Izolowana.Technologie:Front-end: React + TypeScriptBack-end: Python + FastAPI, REST API, SQLAlchemyBaza danych:  PostgreSQL (prywatna maszyna wirtualna)Chmura: Microsoft Azure (Virtual Machines, Virtual Network, Blob Storage, Key Vault)Wdrożenie i CI/CD: Docker, GitHub Actions, Bicep Struktura Repozytorium/frontend - Kod źródłowy aplikacji klienckiej (React)./backend - Kod źródłowy serwera API (FastAPI)./config - Pliki konfiguracyjne, infrastruktura jako kod (IaC - Bicep) oraz konfiguracje wdrożeniowe./docs - Dokumentacja projektu, w tym schematy architektury systemu (diagramy przepływu danych).
+## Architektura
 
- ![Szkic koncepcyjny architektury](docs/obraz.png)
+Publiczne demo używa Azure App Service F1. Azure kończy TLS i przekierowuje HTTP do HTTPS. Frontend React i API FastAPI działają na wspólnym hoście. Endpointy katalogu zwracają dane demonstracyjne. Demo nie ma połączenia z wdrożoną bazą PostgreSQL.
 
- Powyższy schemat przedstawia architekturę trójwarstwową wdrożoną w obrębie sieci wirtualnej Azure VNet. System został podzielony na trzy odseparowane podsieci, aby zapewnić maksymalne bezpieczeństwo:  
- 
- Warstwa Prezentacji (Public Subnet): Zawiera aplikację frontendową w React + TypeScript. Jako jedyna posiada dostęp z Internetu za pomocą protokołu HTTPS przez port 443.   
- 
- Warstwa Logiki (Private Subnet): Zawiera Backend API stworzony w technologiach Python i FastAPI. Odbiera zapytania REST API od warstwy prezentacji i łączy się z usługą Azure Key Vault w celu bezpiecznego pobierania kluczy. Odpowiada również za zapis dokumentacji fotograficznej w usłudze Azure Blob Storage.  
- 
- Warstwa Danych (Isolated Subnet): Jest to całkowicie wyizolowana podsieć zawierająca bazę danych PostgreSQL na Azure VM. Komunikuje się wyłącznie z warstwą logiki poprzez połączenie na porcie 5432, co chroni dane przed nieautoryzowanym dostępem.
+Publiczne demo: https://gearpass-blok08-bcetfjepebbef8hq.swedencentral-01.azurewebsites.net/
+
+Schemat docelowej architektury trójwarstwowej:
+
+![Szkic koncepcyjny architektury](docs/obraz.png)
+
+## Reguły sieciowe (blok 09)
+
+[Szablon sieci w Azure](config/azure/hardening-network.bicep) definiuje `vnet-gearpass` oraz NSG przypisane do trzech podsieci. Reguły w tabeli dotyczą tych podsieci. Publiczne demo na F1 działa poza tą siecią. Do potwierdzenia pełnej izolacji trzeba uruchomić oddzielne warstwy Web, App i Data w sieci i sprawdzić ruch między nimi.
+
+| Warstwa / podsieć | Kierunek | Źródło → cel | TCP | Decyzja |
+| --- | --- | --- | --- | --- |
+| Web · `snet-web` | Inbound | Internet → Web | 80, 443 | Zezwól |
+| Web · `snet-web` | Outbound | Web → App | 8000 | Zezwól |
+| App · `snet-app` | Inbound | Web → App | 8000 | Zezwól |
+| App · `snet-app` | Inbound | Internet → App | 22, 3389 | Blokuj |
+| App · `snet-app` | Outbound | App → Data | 5432 | Zezwól |
+| Data · `snet-data` | Inbound | App → Data | 5432 | Zezwól |
+| Data · `snet-data` | Inbound | Internet → Data | 3306, 5432 | Blokuj |
+| Web, App i Data | Inbound / Outbound | Pozostały ruch inicjowany | Wszystkie | Blokuj |
+
+Tag `Internet` oznacza ruch z publicznego Internetu. Priorytety zezwoleń i blokad szczegółowych to 100 i 110. Reguły blokujące pozostały ruch mają priorytet 4096 i wyprzedzają domyślne reguły NSG. NSG są stanowe, więc odpowiedzi na dozwolone połączenia nie wymagają osobnych reguł.
+
+W publicznym App Service włączone jest `HTTPS Only`, a minimalna wersja TLS dla witryny i SCM to 1.2. FTPS i debugowanie zdalne są wyłączone. Wdrożenie ZIP korzysta z tożsamości OIDC GitHub Actions.
 
 ## Dokumentacja API
 | Metoda | Endpoint | Opis |
