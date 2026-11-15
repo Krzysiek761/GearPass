@@ -13,6 +13,7 @@ var layers = [
     rules: [
       { name: 'AllowInternetWeb', direction: 'Inbound', priority: 100, access: 'Allow', source: 'Internet', destination: web, ports: ['80', '443'] }
       { name: 'AllowWebToApp', direction: 'Outbound', priority: 100, access: 'Allow', source: web, destination: app, ports: ['8000'] }
+      { name: 'AllowTlsCertificateRenewal', direction: 'Outbound', priority: 110, access: 'Allow', source: web, destination: 'Internet', ports: ['443'] }
     ]
   }
   {
