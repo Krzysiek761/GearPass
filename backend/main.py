@@ -1,4 +1,8 @@
 import json
+import logging
+import sys
+import time
+from datetime import datetime, timezone
 import os
 import secrets
 from contextlib import closing
@@ -7,11 +11,38 @@ from pathlib import Path
 import psycopg2
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from psycopg2.extras import RealDictCursor
 
 from models import Equipment
 
 app = FastAPI(title="GearPass API")
+request_logger = logging.getLogger("gearpass.requests")
+if not request_logger.handlers:
+    request_logger.addHandler(logging.StreamHandler(sys.stdout))
+request_logger.setLevel(logging.INFO)
+request_logger.propagate = False
+
+
+@app.middleware("http")
+async def record_http_request(request, call_next):
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        request_logger.info(json.dumps({
+            "event": "http_request",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "method": request.method,
+            "route": getattr(route, "path", "unmatched"),
+            "status_code": status_code,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+        }))
+
 RELEASE_VERSION = Path(__file__).with_name("version.json")
 DATABASE_DSN = os.environ.get("GEARPASS_DB_DSN")
 WRITE_KEY = os.environ.get("GEARPASS_WRITE_KEY")
@@ -22,7 +53,7 @@ if DATABASE_DSN and not WRITE_KEY:
 
 def query(statement, parameters=(), *, many=False):
     try:
-        with closing(psycopg2.connect(DATABASE_DSN, connect_timeout=3)) as connection:
+        with closing(psycopg2.connect(DATABASE_DSN, connect_timeout=3, options="-c statement_timeout=3000")) as connection:
             with connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(statement, parameters)
                 return cursor.fetchall() if many else cursor.fetchone()
@@ -33,6 +64,28 @@ def query(statement, parameters=(), *, many=False):
 def require_writer(key):
     if not key or not secrets.compare_digest(key.encode("utf-8"), WRITE_KEY.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Wymagany prawidłowy klucz zapisu")
+
+
+@app.get("/health", include_in_schema=False)
+def readiness():
+    headers = {"Cache-Control": "no-store"}
+    if not DATABASE_DSN:
+        return JSONResponse(
+            {"status": "DOWN", "database": "NOT_CONFIGURED"},
+            status_code=503,
+            headers=headers,
+        )
+    try:
+        query("SELECT 1")
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        return JSONResponse(
+            {"status": "DOWN", "database": "DOWN"},
+            status_code=503,
+            headers=headers,
+        )
+    return JSONResponse({"status": "UP", "database": "UP"}, headers=headers)
 
 
 @app.get("/api/health")
