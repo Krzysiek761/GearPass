@@ -1,10 +1,10 @@
-# Blok 10 - konfiguracja przygotowana do wdrożenia
+# Blok 10 - wdrożenie i weryfikacja
 
-Stan na 20.11.2026. Pliki w tej gałęzi przygotowują monitoring. Weryfikacja kosztów, wybór odbiorców, instalacja w Azure i zebranie dowodów pozostają do wykonania.
+Wdrożenie zweryfikowano 20.11.2026 na trzech maszynach GearPass w Sweden Central. Publiczny endpoint zwrócił HTTP 200 i JSON z gotowością PostgreSQL. W Log Analytics pojawiły się logi obu usług oraz próbki z każdej maszyny.
 
 ## E1 - budżet
 
-Szablon `budget.bicep` tworzy budżet dla `rg-gearpass`. Budżet można wdrożyć oddzielnie od `resources.bicep`, który odpowiada za monitoring. Domyślna kwota 30 dotyczy waluty rozliczeniowej subskrypcji. Przed wdrożeniem należy potwierdzić walutę i aktualne saldo. Progi 50, 80 i 100 procent wysyłają wiadomości na zweryfikowaną listę contactEmails zawierającą PM-a i członków zespołu. Budżet rozpoczyna się pierwszego dnia bieżącego miesiąca i resetuje co miesiąc. Obejmuje całą grupę rg-gearpass.
+Szablon `budget.bicep` tworzy budżet dla `rg-gearpass`. Budżet można wdrożyć oddzielnie od `resources.bicep`, który odpowiada za monitoring. W Azure ustawiono kwotę 10 EUR za miesiąc w walucie rozliczeniowej subskrypcji. Adresaci są parametrem przekazywanym w Azure. Progi 50, 80 i 100 procent wysyłają wiadomości na zweryfikowaną listę contactEmails zawierającą PM-a i członków zespołu. Budżet rozpoczyna się pierwszego dnia bieżącego miesiąca i resetuje co miesiąc. Obejmuje całą grupę rg-gearpass.
 
 Alert budżetowy jest powiadomieniem. Koszty są aktualizowane z opóźnieniem, a alert nie zatrzymuje maszyn. Utrzymanie aplikacji do 6 grudnia wymaga sprawdzania aktualnego salda i kosztów pozostałych zasobów subskrypcji.
 
@@ -30,7 +30,7 @@ Kod API zapisuje czas obsługi, kod HTTP i wzorzec ścieżki. Pomija query strin
 
 Szablon tworzy współdzielony Azure Workbook „GearPass - CPU, RAM i API”. CPU i RAM dla każdej maszyny pochodzą z próbek Syslog co minutę. Pozostałe wykresy pokazują średni i p95 czas obsługi API oraz liczbę odpowiedzi według kodów. Tabela pokazuje logi FastAPI i PostgreSQL oraz ewentualne błędy sondy.
 
-Po pierwszym wdrożeniu należy zaczekać na ingestę, wygenerować żądania testowe i sprawdzić każdy wykres. W portalu należy włączyć odświeżanie co minutę. Puste wykresy wymagają sprawdzenia timerów, rsyslog, połączenia z agentem i DCR.
+Po pierwszym wdrożeniu należy zaczekać na ingestę, wygenerować żądania testowe i sprawdzić każdy wykres. W portalu można włączyć automatyczne odświeżanie co 5 minut. To najkrótszy dostępny interwał odświeżania widoku. Maszyny wysyłają próbki co minutę. Puste wykresy wymagają sprawdzenia timerów, rsyslog, połączenia z agentem i DCR.
 
 ## Kontrola kosztów
 

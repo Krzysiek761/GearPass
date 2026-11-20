@@ -60,12 +60,12 @@ Caddy pobiera i odnawia certyfikat publicznej domeny. Połączenie HTTP przekier
 
 ## Monitoring i FinOps (blok 10)
 
-Konfigurację przygotowano w [config/azure/monitoring](config/azure/monitoring/README.md). Stan wdrożenia tej gałęzi wymaga potwierdzenia w Azure.
+Konfigurację przygotowano w [config/azure/monitoring](config/azure/monitoring/README.md). Monitoring zweryfikowano 20 listopada 2026 w grupie zasobów `rg-gearpass` w Azure.
 
-- Budżet dla grupy `rg-gearpass` ma parametry kwoty w walucie rozliczeniowej i zweryfikowanych odbiorców. Progi wynoszą 50, 80 i 100 procent. Alerty wysyłają powiadomienia. Dostępne kredyty należy kontrolować do finału 6 grudnia.
-- `GET /health` sprawdza `SELECT 1` w PostgreSQL. Zwraca `200` i `UP` po udanym połączeniu. Awaria bazy lub brak konfiguracji daje `503` i `DOWN`. Na maszynie Web skrypt konfiguruje reverse proxy i uruchamia sondę co minutę.
+- Budżet `gearpass-monthly` dla grupy `rg-gearpass` wynosi 10 EUR miesięcznie. Progi 50%, 80% i 100% kosztu rzeczywistego wysyłają powiadomienia e-mail do zespołu. Dostępne kredyty należy kontrolować do finału 6 grudnia.
+- `GET /health` sprawdza `SELECT 1` w PostgreSQL. Zwraca `200` i `UP` po udanym połączeniu. Awaria bazy lub brak konfiguracji daje `503` i `DOWN`. Na maszynie Web Caddy przekazuje żądania do API, a sonda systemd sprawdza gotowość co minutę.
 - FastAPI emituje JSON z czasem obsługi, kodem HTTP i wzorcem ścieżki. Strumień pomija nagłówki, parametry zapytania i treść żądania.
-- Przygotowany kolektor przekazuje logi aplikacji, PostgreSQL i próbki CPU/RAM do Log Analytics przez istniejącą maszynę Web. Workspace ma retencję 30 dni i limit ingestii 0,05 GB/dobę. Opłaty zależą od faktycznego wolumenu, a egzekwowanie limitu może nastąpić z opóźnieniem.
-- Azure Workbook zawiera wykresy CPU, RAM, czasu obsługi API i kodów odpowiedzi oraz tabelę logów. Dane i zrzuty trzeba zweryfikować po instalacji.
+- Kolektor przekazuje logi aplikacji, PostgreSQL i próbki CPU/RAM do Log Analytics przez istniejącą maszynę Web. Workspace ma retencję 30 dni i limit ingestii 0,05 GB/dobę. Opłaty zależą od faktycznego wolumenu, a egzekwowanie limitu może nastąpić z opóźnieniem.
+- W Azure Workbook „GearPass - CPU, RAM i API” zweryfikowano wykresy CPU i RAM dla trzech VM oraz wykresy czasu obsługi i kodów HTTP. Tabela pokazuje logi FastAPI i PostgreSQL. Próbki są zbierane co minutę. Najkrótszy interwał automatycznego odświeżania widoku w portalu to 5 minut.
 
 Szczegółowa kolejność wdrożenia, warunki sieciowe i testy znajdują się w instrukcji konfiguracji.
