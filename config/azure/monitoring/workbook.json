@@ -1,0 +1,104 @@
+{
+  "version": "Notebook/1.0",
+  "isLocked": false,
+  "items": [
+    {
+      "type": 3,
+      "name": "CPU % - Web, App, Data",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "CPU % - Web, App, Data",
+        "query": "Syslog | extend event=parse_json(SyslogMessage) | where tostring(event.event) == \"host_metrics\"\n| summarize CPU=avg(todouble(event.cpu_percent)) by bin(TimeGenerated, 1m), host=tostring(event.host)\n| render timechart",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "__WORKSPACE_ID__"
+        ],
+        "visualization": "timechart",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 3600000
+        }
+      }
+    },
+    {
+      "type": 3,
+      "name": "RAM % - Web, App, Data",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "RAM % - Web, App, Data",
+        "query": "Syslog | extend event=parse_json(SyslogMessage) | where tostring(event.event) == \"host_metrics\"\n| summarize RAM=avg(todouble(event.memory_percent)) by bin(TimeGenerated, 1m), host=tostring(event.host)\n| render timechart",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "__WORKSPACE_ID__"
+        ],
+        "visualization": "timechart",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 3600000
+        }
+      }
+    },
+    {
+      "type": 3,
+      "name": "Czas odpowiedzi API w ms",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Czas odpowiedzi API w ms",
+        "query": "Syslog | extend event=parse_json(SyslogMessage) | where tostring(event.event) == \"http_request\"\n| summarize AverageMs=avg(todouble(event.duration_ms)), P95Ms=percentile(todouble(event.duration_ms), 95) by bin(TimeGenerated, 1m)\n| render timechart",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "__WORKSPACE_ID__"
+        ],
+        "visualization": "timechart",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 3600000
+        }
+      }
+    },
+    {
+      "type": 3,
+      "name": "Żądania HTTP według kodów",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Żądania HTTP według kodów",
+        "query": "Syslog | extend event=parse_json(SyslogMessage) | where tostring(event.event) == \"http_request\"\n| extend code=toint(event.status_code)\n| extend class=case(code < 300, \"2xx\", code < 400, \"3xx\", code < 500, \"4xx\", \"5xx\")\n| summarize Requests=count() by bin(TimeGenerated, 1m), class\n| render columnchart",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "__WORKSPACE_ID__"
+        ],
+        "visualization": "barchart",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 3600000
+        }
+      }
+    },
+    {
+      "type": 3,
+      "name": "Logi FastAPI i PostgreSQL",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Logi FastAPI i PostgreSQL",
+        "query": "Syslog\n| where ProcessName in (\"gearpass\", \"gearpass-postgresql\")\n| project TimeGenerated, Computer, ProcessName, SeverityLevel, SyslogMessage\n| order by TimeGenerated desc\n| take 100",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "__WORKSPACE_ID__"
+        ],
+        "visualization": "table",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 3600000
+        }
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "__WORKSPACE_ID__"
+  ]
+}
