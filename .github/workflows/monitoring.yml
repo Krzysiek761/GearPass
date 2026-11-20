@@ -1,0 +1,32 @@
+name: Validate monitoring configuration
+
+on:
+  pull_request:
+    paths:
+      - 'config/azure/monitoring/**'
+      - '.github/workflows/monitoring.yml'
+  push:
+    paths:
+      - 'config/azure/monitoring/**'
+      - '.github/workflows/monitoring.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile Azure Monitor and budget resources
+        run: |
+          az bicep build --file config/azure/monitoring/resources.bicep
+          az bicep build --file config/azure/monitoring/budget.bicep
+      - name: Validate collector syntax and workbook JSON
+        run: |
+          bash -n config/azure/monitoring/configure-vm.sh
+          bash -n config/azure/monitoring/configure-health.sh
+          python3 -m py_compile config/azure/monitoring/emit-metrics.py
+          python3 -m json.tool config/azure/monitoring/workbook.json > /dev/null
