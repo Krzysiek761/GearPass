@@ -57,3 +57,15 @@ Caddy pobiera i odnawia certyfikat publicznej domeny. Połączenie HTTP przekier
 ## Instrukcja Uruchomienia Lokalnego
 **Backend:** `cd backend` -> `uvicorn main:app --reload`
 **Frontend:** `cd frontend` -> `npm install` -> `npm run dev`
+
+## Monitoring i FinOps (blok 10)
+
+Konfigurację przygotowano w [config/azure/monitoring](config/azure/monitoring/README.md). Stan wdrożenia tej gałęzi wymaga potwierdzenia w Azure.
+
+- Budżet dla grupy `rg-gearpass` ma parametry kwoty w walucie rozliczeniowej i zweryfikowanych odbiorców. Progi wynoszą 50, 80 i 100 procent. Alerty wysyłają powiadomienia. Dostępne kredyty należy kontrolować do finału 6 grudnia.
+- `GET /health` sprawdza `SELECT 1` w PostgreSQL. Zwraca `200` i `UP` po udanym połączeniu. Awaria bazy lub brak konfiguracji daje `503` i `DOWN`. Wdrożenie na VM wymaga aktualizacji backendu i reguły reverse proxy.
+- FastAPI emituje JSON z czasem obsługi, kodem HTTP i wzorcem ścieżki. Strumień pomija nagłówki, parametry zapytania i treść żądania.
+- Przygotowany kolektor przekazuje logi aplikacji, PostgreSQL i próbki CPU/RAM do Log Analytics przez istniejącą maszynę Web. Workspace ma retencję 30 dni i limit ingestii 0,05 GB/dobę. Opłaty zależą od faktycznego wolumenu, a egzekwowanie limitu może nastąpić z opóźnieniem.
+- Azure Workbook zawiera wykresy CPU, RAM, czasu obsługi API i kodów odpowiedzi oraz tabelę logów. Dane i zrzuty trzeba zweryfikować po instalacji.
+
+Szczegółowa kolejność wdrożenia, warunki sieciowe i testy znajdują się w instrukcji konfiguracji.
