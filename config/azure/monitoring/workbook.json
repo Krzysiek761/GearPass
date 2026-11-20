@@ -84,7 +84,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "title": "Logi FastAPI i PostgreSQL",
-        "query": "Syslog\n| where ProcessName in (\"gearpass\", \"gearpass-postgresql\")\n| project TimeGenerated, Computer, ProcessName, SeverityLevel, SyslogMessage\n| order by TimeGenerated desc\n| take 100",
+        "query": "Syslog\n| where ProcessName in (\"gearpass\", \"gearpass-postgresql\", \"gearpass-health\")\n| project TimeGenerated, Computer, ProcessName, SeverityLevel, SyslogMessage\n| order by TimeGenerated desc\n| take 100",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [

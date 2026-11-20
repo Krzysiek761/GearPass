@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copy emit-metrics.py to the same directory, then run as root with web, app or data.
+# Copy emit-metrics.py and configure-health.sh to this directory before running.
 set -euo pipefail
 role="${1:?Usage: configure-vm.sh web|app|data}"
 case "$role" in web|app|data) ;; *) exit 2 ;; esac
@@ -20,16 +20,6 @@ case "$role" in
 module(load="imtcp")
 input(type="imtcp" address="10.79.0.4" port="5514")
 CONF
-    caddyfile=/etc/caddy/Caddyfile
-    if ! grep -q 'handle /health {' "$caddyfile"; then
-      cp -p "$caddyfile" /etc/caddy/Caddyfile.before-monitoring
-      sed -i '/handle \/api\/\*/i\  handle /health {\n    reverse_proxy 10.79.0.68:8000\n  }' "$caddyfile"
-      if ! caddy validate --config "$caddyfile"; then
-        cp -p /etc/caddy/Caddyfile.before-monitoring "$caddyfile"
-        exit 1
-      fi
-      systemctl reload caddy
-    fi
     ;;
   app|data)
     cat > /etc/rsyslog.d/20-gearpass-forward.conf <<'CONF'
@@ -104,3 +94,7 @@ systemctl restart systemd-journald rsyslog
 systemctl daemon-reload
 systemctl enable --now gearpass-metrics.timer
 systemctl start gearpass-metrics.service
+
+if [[ "$role" == web ]]; then
+  bash ./configure-health.sh
+fi

@@ -4,7 +4,7 @@ Stan na 20.11.2026. Pliki w tej gałęzi przygotowują monitoring. Weryfikacja k
 
 ## E1 - budżet
 
-Szablon resources.bicep tworzy budżet dla rg-gearpass. Domyślna kwota 30 dotyczy waluty rozliczeniowej subskrypcji. Przed wdrożeniem należy potwierdzić walutę i aktualne saldo. Progi 50, 80 i 100 procent wysyłają wiadomości na zweryfikowaną listę contactEmails zawierającą PM-a i członków zespołu. Budżet rozpoczyna się pierwszego dnia bieżącego miesiąca i resetuje co miesiąc. Obejmuje całą grupę rg-gearpass.
+Szablon `budget.bicep` tworzy budżet dla `rg-gearpass`. Budżet można wdrożyć oddzielnie od `resources.bicep`, który odpowiada za monitoring. Domyślna kwota 30 dotyczy waluty rozliczeniowej subskrypcji. Przed wdrożeniem należy potwierdzić walutę i aktualne saldo. Progi 50, 80 i 100 procent wysyłają wiadomości na zweryfikowaną listę contactEmails zawierającą PM-a i członków zespołu. Budżet rozpoczyna się pierwszego dnia bieżącego miesiąca i resetuje co miesiąc. Obejmuje całą grupę rg-gearpass.
 
 Alert budżetowy jest powiadomieniem. Koszty są aktualizowane z opóźnieniem, a alert nie zatrzymuje maszyn. Utrzymanie aplikacji do 6 grudnia wymaga sprawdzania aktualnego salda i kosztów pozostałych zasobów subskrypcji.
 
@@ -12,7 +12,9 @@ Alert budżetowy jest powiadomieniem. Koszty są aktualizowane z opóźnieniem, 
 
 GET /health wykonuje SELECT 1 w PostgreSQL i zwraca 200 z {"status":"UP","database":"UP"}. Niedostępna baza daje 503 i status DOWN. Brak konfiguracji PostgreSQL daje 503 i NOT_CONFIGURED. Dotychczasowy /api/health zachowuje format wykorzystywany przez frontend oraz CI/CD.
 
-Zmiana wymaga publikacji backendu na vm-gearpass-app i reguły Caddy przekazującej /health do 10.79.0.68:8000. Na vm-gearpass-web trzeba też uruchomić sondę co minutę, np. timer systemd z curl --fail --max-time 8 http://10.79.0.68:8000/health. Po wdrożeniu należy sprawdzić publiczny adres oraz zachowanie po błędzie bazy w kontrolowanym teście.
+Wersję API na `vm-gearpass-app` aktualizuje się osobno od wdrożenia App Service z GitHub Actions. Po aktualizacji backendu uruchom `bash configure-health.sh` na `vm-gearpass-web`. Skrypt waliduje konfigurację Caddy przed przeładowaniem i instaluje timer `gearpass-health.timer`. Timer co minutę odpytuje prywatny backend z limitem 8 sekund, a błędy zapisuje w dzienniku usługi `gearpass-health.service`.
+
+Po wdrożeniu sprawdź `curl -fsS https://gearpass-projekt-sc.swedencentral.cloudapp.azure.com/health` oraz `systemctl list-timers gearpass-health.timer` na Web. Zachowanie przy niedostępnej bazie sprawdza test backendu, który symuluje awarię poza produkcją.
 
 ## E3 - centralne logi
 
@@ -20,13 +22,13 @@ Wybrany wariant korzysta z Azure Monitor Agent na istniejącej maszynie Web. App
 
 Przed uruchomieniem szablonu trzeba nadać istniejącej maszynie Web systemową tożsamość zarządzaną. Agent wymaga dostępnego wyjścia HTTPS do Azure Monitor i Azure Resource Manager oraz działającego DNS. Działający Web ma publiczny adres i wyjściowe TCP 443. App i Data zachowują prywatne adresy, a ich telemetria wychodzi do Web.
 
-Na każdej VM należy sprawdzić obecność rsyslog, skopiować configure-vm.sh oraz emit-metrics.py i uruchomić skrypt z rolą web, app lub data jako root. Należy najpierw wdrożyć zmiany backendu. Skrypt ustawia logi systemd, przekazywanie Syslog i próbki CPU/RAM co 60 sekund. Na Data włącza logi połączeń PostgreSQL i zapis lokalny stderr. Zapytania SQL pozostają poza strumieniem logów.
+Na każdej VM należy sprawdzić obecność rsyslog, skopiować `configure-vm.sh`, `emit-metrics.py` oraz `configure-health.sh` i uruchomić skrypt z rolą web, app lub data jako root. Należy najpierw wdrożyć zmiany backendu. Skrypt ustawia logi systemd, przekazywanie Syslog i próbki CPU/RAM co 60 sekund. Na Data włącza logi połączeń PostgreSQL i zapis lokalny stderr. Zapytania SQL pozostają poza strumieniem logów.
 
 Kod API zapisuje czas obsługi, kod HTTP i wzorzec ścieżki. Pomija query string, nagłówki i treść żądania. Do oceny błędów służy status_code. Czas duration_ms dotyczy obsługi w API.
 
 ## E4 - dashboard
 
-Szablon tworzy współdzielony Azure Workbook „GearPass - CPU, RAM i API”. CPU i RAM dla każdej maszyny pochodzą z próbek Syslog co minutę. Pozostałe wykresy pokazują średni i p95 czas obsługi API oraz liczbę odpowiedzi według kodów. Tabela pokazuje logi FastAPI i PostgreSQL.
+Szablon tworzy współdzielony Azure Workbook „GearPass - CPU, RAM i API”. CPU i RAM dla każdej maszyny pochodzą z próbek Syslog co minutę. Pozostałe wykresy pokazują średni i p95 czas obsługi API oraz liczbę odpowiedzi według kodów. Tabela pokazuje logi FastAPI i PostgreSQL oraz ewentualne błędy sondy.
 
 Po pierwszym wdrożeniu należy zaczekać na ingestę, wygenerować żądania testowe i sprawdzić każdy wykres. W portalu należy włączyć odświeżanie co minutę. Puste wykresy wymagają sprawdzenia timerów, rsyslog, połączenia z agentem i DCR.
 
@@ -39,8 +41,8 @@ Kolektor używa istniejącej maszyny Web. Plan zakłada pozostawienie trzech mas
 ## Kolejność wdrożenia i dowody
 
 1. Sprawdzić aktualne saldo, walutę, koszty i adresy odbiorców.
-2. Zweryfikować szablon Bicep. Włączyć tożsamość Web, wdrożyć zasoby monitoringu i sprawdzić reguły NSG.
-3. Zaktualizować backend. Skopiować skrypty na VM i sprawdzić ich wykonanie.
+2. Wykonać Azure `what-if` dla `budget.bicep` z zatwierdzonymi parametrami i wdrożyć budżet w grupie `rg-gearpass`.
+3. Zaktualizować backend na `vm-gearpass-app` i skonfigurować sondę na Web. Włączyć tożsamość zarządzaną Web, wykonać Azure `what-if` dla `resources.bicep`, wdrożyć monitoring i sprawdzić reguły NSG. Skopiować skrypty na VM i sprawdzić ich wykonanie.
 4. Sprawdzić GET /health, dane w Syslog i wszystkie wykresy workbooka.
 5. Zebrać zrzuty alertów, JSON z /health, logów, wykresów i sekcji README. W PDF opisać faktycznie wykonany wkład przy E1-E5.
 
